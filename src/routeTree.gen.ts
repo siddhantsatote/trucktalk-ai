@@ -10,33 +10,43 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiAnalyzeTruckRouteImport } from './routes/api/analyze-truck'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAnalyzeTruckRoute = ApiAnalyzeTruckRouteImport.update({
+  id: '/api/analyze-truck',
+  path: '/api/analyze-truck',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/analyze-truck': typeof ApiAnalyzeTruckRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/analyze-truck': typeof ApiAnalyzeTruckRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/analyze-truck': typeof ApiAnalyzeTruckRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/api/analyze-truck'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/api/analyze-truck'
+  id: '__root__' | '/' | '/api/analyze-truck'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiAnalyzeTruckRoute: typeof ApiAnalyzeTruckRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +58,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/analyze-truck': {
+      id: '/api/analyze-truck'
+      path: '/api/analyze-truck'
+      fullPath: '/api/analyze-truck'
+      preLoaderRoute: typeof ApiAnalyzeTruckRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiAnalyzeTruckRoute: ApiAnalyzeTruckRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
