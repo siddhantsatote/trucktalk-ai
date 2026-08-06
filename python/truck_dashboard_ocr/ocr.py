@@ -35,7 +35,16 @@ def _variants(image: Image.Image) -> list[tuple[str, Image.Image]]:
     # Handwriting / paper documents: gentle adaptive-ish threshold.
     paper = sharp.filter(ImageFilter.MedianFilter(3)).point(lambda p: 255 if p > 120 else 0)
 
-    return [("contrast", sharp), ("lcd", lcd), ("paper", paper)]
+    # Zoomed centre panel: on a cluster photo this is the LCD info display.
+    w, h = base.size
+    centre = base.crop((int(w * 0.30), int(h * 0.32), int(w * 0.72), int(h * 0.92)))
+    centre = centre.resize((centre.width * 2, centre.height * 2), Image.LANCZOS)
+    centre = ImageOps.invert(
+        ImageOps.autocontrast(centre, cutoff=2).point(lambda p: 255 if p > 150 else 0)
+    )
+
+    return [("contrast", sharp), ("lcd", lcd), ("paper", paper), ("lcd-zoom", centre)]
+
 
 
 def _run(img: Image.Image, psm: int, whitelist: str | None = None) -> str:
