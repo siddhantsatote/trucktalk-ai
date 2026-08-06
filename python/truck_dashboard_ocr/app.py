@@ -99,25 +99,38 @@ if files:
         image = Image.open(file)
         left.image(image, width="stretch")
 
-        with right:
+        ocr_key = f"ocr-{file.name}"
+        res_key = f"res-{file.name}"
+        if ocr_key not in st.session_state:
             with st.spinner("Reading image…"):
-                text = extract_text(image)
-            if show_raw_ocr:
-                with st.expander("Raw OCR text"):
-                    st.code(text)
-            try:
-                with st.spinner("Interpreting with Llama 3.3 70B…"):
-                    result = interpret(text, api_key=api_key, filename=file.name)
-            except GroqError as exc:
-                st.error(str(exc))
-                continue
-            render(result)
-            st.download_button(
-                "Download JSON",
-                data=json.dumps(result, indent=2),
-                file_name=f"{os.path.splitext(file.name)[0]}.json",
-                mime="application/json",
-                key=f"dl-{file.name}",
-            )
+                st.session_state[ocr_key] = extract_text(image)
+
+        with right:
+            with st.expander("OCR text (edit to correct misread digits, then re-analyze)", expanded=show_raw_ocr):
+                st.session_state[ocr_key] = st.text_area(
+                    "Extracted text", st.session_state[ocr_key], height=220, key=f"ta-{file.name}"
+                )
+
+            if res_key not in st.session_state or st.button("Analyze", key=f"btn-{file.name}"):
+                try:
+                    with st.spinner("Interpreting with Llama 3.3 70B…"):
+                        st.session_state[res_key] = interpret(
+                            st.session_state[ocr_key], api_key=api_key, filename=file.name
+                        )
+                except GroqError as exc:
+                    st.error(str(exc))
+                    continue
+
+            result = st.session_state.get(res_key)
+            if result:
+                render(result)
+                st.download_button(
+                    "Download JSON",
+                    data=json.dumps(result, indent=2, ensure_ascii=False),
+                    file_name=f"{os.path.splitext(file.name)[0]}.json",
+                    mime="application/json",
+                    key=f"dl-{file.name}",
+                )
 else:
     st.info("Upload one or more photos to begin.")
+
