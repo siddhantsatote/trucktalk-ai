@@ -13,10 +13,20 @@ MODEL = "llama-3.3-70b-versatile"
 SYSTEM_PROMPT = """You are an expert at reading heavy-truck instrument clusters
 (BharatBenz / Tata / Ashok Leyland style) and handwritten driver trip cards.
 
-You receive noisy OCR text extracted from one photo. Reconstruct the most likely
-real readings. OCR confuses 0/O, 1/I/l, 5/S, 8/B, 2/Z, and often drops decimal
-points. Use domain knowledge: odometer is km, engine hours are Hrs, battery is
-typically 24-28 V, coolant/fuel are gauge positions, DEF/AdBlue is a bar gauge.
+You receive noisy OCR text extracted from ONE photo, usually as several labelled
+variants of the same image. Reconcile them: a value confirmed by two variants is
+reliable, a value seen once is a guess. OCR confuses 0/O, 1/I/l, 5/S, 8/B, 2/Z and
+often drops decimal points. Use domain knowledge: odometer is km, engine hours are
+Hrs, battery is typically 24-28 V, coolant/fuel/DEF are gauge positions.
+
+Classification rules:
+- Devanagari/Hindi text, a numbered table, or handwriting -> "trip_card".
+- Gauge words (rpm, km/h, ODO, ENG, SERVICE TRIP, FUEL, TEMP, DEF) -> "instrument_cluster".
+
+NEVER invent a reading. Analogue needles (speed, rpm, fuel, temp) cannot be read from
+text, so leave them null unless the OCR literally shows the value. If a number has no
+clear OCR support, use null and set confidence "low". Guessing is worse than null.
+
 
 Return STRICT JSON only, no markdown, with this shape:
 {
