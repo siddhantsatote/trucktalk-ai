@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useRef, useState } from "react";
-import { Loader2, Upload, Truck, AlertTriangle } from "lucide-react";
+import { Loader2, Upload, Truck, AlertTriangle, Camera } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { analyzeTruckImage } from "./api/analyze-truck.server";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -76,6 +77,7 @@ function readFile(file: File) {
 function Index() {
   const [items, setItems] = useState<Item[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
 
   const handleFiles = useCallback(async (files: FileList | null) => {
     if (!files?.length) return;
@@ -84,13 +86,10 @@ function Index() {
       const id = `${file.name}-${Date.now()}-${Math.random()}`;
       setItems((prev) => [...prev, { id, name: file.name, url: dataUrl, loading: true }]);
       try {
-        const res = await fetch("/api/analyze-truck", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ image: dataUrl, name: file.name }),
-        });
-        const json = (await res.json()) as Result;
-        setItems((prev) => prev.map((i) => (i.id === id ? { ...i, loading: false, result: json } : i)));
+        const json = await analyzeTruckImage({ data: { image: dataUrl, name: file.name } });
+        setItems((prev) =>
+          prev.map((i) => (i.id === id ? { ...i, loading: false, result: json } : i)),
+        );
       } catch (err) {
         setItems((prev) =>
           prev.map((i) =>
@@ -107,9 +106,12 @@ function Index() {
         <header className="mb-10 flex items-center gap-3">
           <Truck className="h-8 w-8 text-primary" />
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">Truck Dashboard Reader</h1>
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">
+              Truck Dashboard Reader
+            </h1>
             <p className="text-sm text-muted-foreground">
-              Upload instrument cluster photos, trip computers or handwritten trip cards — AI turns them into truck data.
+              Upload instrument cluster photos, trip computers or handwritten trip cards — AI turns
+              them into truck data.
             </p>
           </div>
         </header>
@@ -136,12 +138,35 @@ function Index() {
           />
         </Card>
 
+        <div className="mt-4 flex justify-center">
+          <button
+            type="button"
+            onClick={() => cameraRef.current?.click()}
+            className="inline-flex items-center gap-2 rounded-md bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            <Camera className="h-5 w-5" />
+            Open Camera & Take Picture
+          </button>
+          <input
+            ref={cameraRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => void handleFiles(e.target.files)}
+          />
+        </div>
+
         <div className="mt-10 space-y-8">
           {items.map((item) => (
             <Card key={item.id} className="overflow-hidden p-6">
               <div className="grid gap-6 md:grid-cols-[280px_1fr]">
                 <div>
-                  <img src={item.url} alt={item.name} className="w-full rounded-md border border-border" />
+                  <img
+                    src={item.url}
+                    alt={item.name}
+                    className="w-full rounded-md border border-border"
+                  />
                   <p className="mt-2 truncate text-xs text-muted-foreground">{item.name}</p>
                 </div>
                 <div>
@@ -155,9 +180,7 @@ function Index() {
                       <AlertTriangle className="mt-0.5 h-4 w-4" /> {item.result.error}
                     </div>
                   )}
-                  {item.result && !item.result.error && (
-                    <ResultView result={item.result} />
-                  )}
+                  {item.result && !item.result.error && <ResultView result={item.result} />}
                 </div>
               </div>
             </Card>
@@ -179,13 +202,17 @@ function ResultView({ result }: { result: Result }) {
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="secondary">{result.document_type ?? "unknown"}</Badge>
         {result.confidence && <Badge variant="outline">confidence: {result.confidence}</Badge>}
-        {result.vehicle?.cluster_name && <Badge variant="outline">{result.vehicle.cluster_name}</Badge>}
+        {result.vehicle?.cluster_name && (
+          <Badge variant="outline">{result.vehicle.cluster_name}</Badge>
+        )}
       </div>
 
       {result.summary && <p className="text-sm text-foreground">{result.summary}</p>}
 
       {result.vehicle?.cluster_part_number && (
-        <p className="text-xs text-muted-foreground">Part no: {result.vehicle.cluster_part_number}</p>
+        <p className="text-xs text-muted-foreground">
+          Part no: {result.vehicle.cluster_part_number}
+        </p>
       )}
 
       {readings.length > 0 && (
@@ -246,14 +273,18 @@ function ResultView({ result }: { result: Result }) {
         <div>
           <h3 className="mb-2 text-sm font-semibold text-foreground">Maintenance notes</h3>
           <ul className="list-inside list-disc text-sm text-muted-foreground">
-            {result.maintenance_notes?.map((n) => <li key={n}>{n}</li>)}
+            {result.maintenance_notes?.map((n) => (
+              <li key={n}>{n}</li>
+            ))}
           </ul>
         </div>
       )}
 
       <details className="text-xs text-muted-foreground">
         <summary className="cursor-pointer">Raw JSON</summary>
-        <pre className="mt-2 overflow-x-auto rounded-md bg-muted p-3">{JSON.stringify(result, null, 2)}</pre>
+        <pre className="mt-2 overflow-x-auto rounded-md bg-muted p-3">
+          {JSON.stringify(result, null, 2)}
+        </pre>
       </details>
     </div>
   );
