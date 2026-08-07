@@ -39,9 +39,9 @@ Return STRICT JSON only, no markdown:
   "confidence": "high" | "medium" | "low"
 }`;
 
-const MAX_IMAGE_WIDTH = 1024;
-const MAX_IMAGE_HEIGHT = 1024;
-const JPEG_QUALITY = 0.8;
+const MAX_IMAGE_WIDTH = 512;
+const MAX_IMAGE_HEIGHT = 512;
+const JPEG_QUALITY = 0.5;
 
 async function compressImage(dataUrl: string): Promise<string> {
   const parts = dataUrl.split(",");
@@ -105,6 +105,9 @@ export const analyzeTruckImage = createServerFn({ method: "POST" })
       } catch {
         imageUrl = image;
       }
+
+      const payloadSizeKB = Math.round(new TextEncoder().encode(JSON.stringify({ image: imageUrl })).byteLength / 1024);
+      console.log(`[analyze-truck] Payload image size: ~${payloadSizeKB}KB`);
 
       const payload = {
         messages: [
