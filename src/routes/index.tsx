@@ -65,12 +65,29 @@ const LABELS: Record<string, string> = {
   consumption: "Consumption",
 };
 
-function readFile(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
+function compressImageClient(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const MAX = 512;
+      let w = img.naturalWidth;
+      let h = img.naturalHeight;
+      if (w > MAX || h > MAX) {
+        const scale = Math.min(MAX / w, MAX / h);
+        w = Math.round(w * scale);
+        h = Math.round(h * scale);
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL("image/jpeg", 0.5));
+    };
+    img.onerror = reject;
+    img.src = url;
   });
 }
 
@@ -82,7 +99,7 @@ function Index() {
   const handleFiles = useCallback(async (files: FileList | null) => {
     if (!files?.length) return;
     for (const file of Array.from(files)) {
-      const dataUrl = await readFile(file);
+      const dataUrl = await compressImageClient(file);
       const id = `${file.name}-${Date.now()}-${Math.random()}`;
       setItems((prev) => [...prev, { id, name: file.name, url: dataUrl, loading: true }]);
       try {
