@@ -86,14 +86,21 @@ function Index() {
       const id = `${file.name}-${Date.now()}-${Math.random()}`;
       setItems((prev) => [...prev, { id, name: file.name, url: dataUrl, loading: true }]);
       try {
-        const json = await analyzeTruckImage({ data: { image: dataUrl, name: file.name } });
+        const response = await analyzeTruckImage({ data: { image: dataUrl, name: file.name } });
+        const json = response?.data ?? response;
         setItems((prev) =>
           prev.map((i) => (i.id === id ? { ...i, loading: false, result: json } : i)),
         );
       } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : typeof err === "string"
+              ? err
+              : JSON.stringify(err);
         setItems((prev) =>
           prev.map((i) =>
-            i.id === id ? { ...i, loading: false, result: { error: String(err) } } : i,
+            i.id === id ? { ...i, loading: false, result: { error: message } } : i,
           ),
         );
       }
