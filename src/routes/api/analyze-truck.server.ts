@@ -165,11 +165,14 @@ async function callNvidia(imageUrl: string, fileName: string): Promise<ProviderR
 }
 
 function stripThinkingTags(content: string): string {
-  return content
-    .replace(/<think>[\s\S]*?<\/think>/gi, "")
-    .replace(/<think>[\s\S]*?<｜end▁of▁thinking｜>/gi, "")
-    .replace(/<\|begin▁of▁thinking\|>[\s\S]*?<\|end▁of▁thinking\|>/gi, "")
-    .trim();
+  let result = content;
+  // Remove complete thinking blocks
+  result = result.replace(/<think>[\s\S]*?<\/think>/gi, "");
+  result = result.replace(/<think>[\s\S]*?<｜end▁of▁thinking｜>/gi, "");
+  result = result.replace(/<\|begin▁of▁thinking\|>[\s\S]*?<\|end▁of▁thinking\|>/gi, "");
+  // Remove unclosed thinking blocks (from <think> to end of string)
+  result = result.replace(/<think>[\s\S]*/gi, "");
+  return result.trim();
 }
 
 function parseJsonFromContent(content: string): unknown {
@@ -292,7 +295,8 @@ export const analyzeTruckImage = createServerFn({ method: "POST" })
           const parsed = parseJsonFromContent(result.content);
           return fixMissingDecimals(parsed as Record<string, unknown>);
         } catch {
-          return { summary: result.content, confidence: "low" };
+          const cleaned = stripThinkingTags(result.content);
+          return { summary: cleaned.slice(0, 500), confidence: "low", provider: result.provider };
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
