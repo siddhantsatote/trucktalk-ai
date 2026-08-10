@@ -204,6 +204,52 @@ function parseJsonFromContent(content: string): unknown {
   return JSON.parse(trimmed);
 }
 
+const DECIMAL_FIELDS: Record<string, { maxDigitsBeforeDot: number; defaultDotFromRight: number }> = {
+  engine_hours: { maxDigitsBeforeDot: 3, defaultDotFromRight: 1 },
+  service_trip_hours: { maxDigitsBeforeDot: 3, defaultDotFromRight: 1 },
+  speed_kmph: { maxDigitsBeforeDot: 2, defaultDotFromRight: 1 },
+  average_fuel_economy_kmpl: { maxDigitsBeforeDot: 2, defaultDotFromRight: 1 },
+  battery_voltage: { maxDigitsBeforeDot: 2, defaultDotFromRight: 1 },
+  rpm: { maxDigitsBeforeDot: 4, defaultDotFromRight: 0 },
+  fuel_level: { maxDigitsBeforeDot: 3, defaultDotFromRight: 0 },
+  coolant_temp: { maxDigitsBeforeDot: 3, defaultDotFromRight: 0 },
+  odometer_km: { maxDigitsBeforeDot: 5, defaultDotFromRight: 1 },
+  service_trip_km: { maxDigitsBeforeDot: 5, defaultDotFromRight: 1 },
+  trip_distance: { maxDigitsBeforeDot: 5, defaultDotFromRight: 1 },
+  consumption: { maxDigitsBeforeDot: 3, defaultDotFromRight: 1 },
+};
+
+function fixMissingDecimals(parsed: Record<string, unknown>): Record<string, unknown> {
+  if (!parsed || typeof parsed !== "object") return parsed;
+
+  const readings = parsed.readings as Record<string, string | null> | undefined;
+  if (!readings || typeof readings !== "object") return parsed;
+
+  const fixed = { ...readings };
+
+  for (const [key, config] of Object.entries(DECIMAL_FIELDS)) {
+    const val = fixed[key];
+    if (typeof val !== "string") continue;
+    if (val.includes(".") || val.includes(":")) continue;
+
+    const digits = val.replace(/[^0-9]/g, "");
+    if (!digits) continue;
+
+    const num = parseInt(digits, 10);
+    if (isNaN(num)) continue;
+
+    if (digits.length <= config.maxDigitsBeforeDot) continue;
+
+    const dotPos = digits.length - config.defaultDotFromRight;
+    if (dotPos <= 0 || dotPos >= digits.length) continue;
+
+    const withDot = digits.slice(0, dotPos) + "." + digits.slice(dotPos);
+    fixed[key] = withDot;
+  }
+
+  return { ...parsed, readings: fixed };
+}
+
 const inputSchema = z.object({ image: z.string(), name: z.string() });
 
 export const analyzeTruckImage = createServerFn({ method: "POST" })
@@ -229,7 +275,8 @@ export const analyzeTruckImage = createServerFn({ method: "POST" })
         const result = await provider(imageUrl, name);
         console.log(`[analyze-truck] Success with ${result.provider}`);
         try {
-          return parseJsonFromContent(result.content);
+          const parsed = parseJsonFromContent(result.content);
+          return fixMissingDecimals(parsed as Record<string, unknown>);
         } catch {
           return { summary: result.content, confidence: "low" };
         }
