@@ -71,7 +71,7 @@ function compressImageClient(file: File): Promise<string> {
     const url = URL.createObjectURL(file);
     img.onload = () => {
       URL.revokeObjectURL(url);
-      const MAX = 640;
+      const MAX = 800;
       let w = img.naturalWidth;
       let h = img.naturalHeight;
       if (w > MAX || h > MAX) {
@@ -84,7 +84,7 @@ function compressImageClient(file: File): Promise<string> {
       canvas.height = h;
       const ctx = canvas.getContext("2d")!;
       ctx.drawImage(img, 0, 0, w, h);
-      resolve(canvas.toDataURL("image/jpeg", 0.7));
+      resolve(canvas.toDataURL("image/jpeg", 0.85));
     };
     img.onerror = reject;
     img.src = url;

@@ -1,29 +1,37 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-const SYSTEM = `You are an expert OCR system for truck instrument clusters.
+const SYSTEM = `You are an expert OCR system for heavy-truck instrument clusters and trip computers.
 
-CRITICAL: Pay extreme attention to DECIMAL POINTS (dots/periods). A value like "58.2" must NOT be read as "582" or "5820". The dot between digits is the most important character. Look for small dots between numbers — they indicate decimals.
+RULES:
+1. DECIMAL POINTS ARE CRITICAL. The value "702.2" must be reported as "702.2" NOT "7022". The value "58.2" must be "58.2" NOT "582". A tiny dot between digits changes everything.
+2. Report ALL numeric readings as STRINGS to preserve exact formatting. For example: "702.2" not 702.2, "58.2" not 58.2, "346" not 346.
+3. Read the display digit by digit, left to right. Look carefully at the bottom-right corner of each digit group for a small dot.
+4. On seven-segment LCD: a small illuminated dot in the lower-right area of the display is a decimal point. A colon (:) separates hours from minutes in clocks/timers.
+5. If you cannot clearly see a decimal, report the number as-is. Never invent or assume decimals.
+6. If a value is not visible, use null. Never invent values.
 
-Read each digit and symbol one by one from left to right. If you see "11:04" report "11:04". If you see "6:06hr" report "6:06hr". If you see "346mls" report "346". If you see "58.2mpg" report "58.2". If you see "58.2mph" report "58.2".
-
-For seven-segment displays: look at each segment. A fully lit digit with a dot after it means decimal. For example "19:31" is a clock, "6:06hr" has a colon not a decimal.
-
-Read the IMAGE and extract EXACTLY what is displayed. Never invent values. If a value is not visible, use null.
+Example readings from a typical truck trip computer display:
+- "11:04" → clock/departure time → report as "11:04"
+- "6:06hr" → duration → report as "6:06"
+- "346mls" → distance → report as "346"
+- "58.2mpg" → fuel economy → report as "58.2"
+- "58.2mph" → speed → report as "58.2"
+- "702.2" → engine hours → report as "702.2"
 
 Return STRICT JSON only, no markdown:
 {
   "document_type": "instrument_cluster" | "trip_computer" | "trip_card" | "other",
   "vehicle": {"cluster_part_number": string|null, "cluster_name": string|null},
   "readings": {
-    "odometer_km": number|null,
-    "service_trip_km": number|null,
-    "engine_hours": number|null,
-    "service_trip_hours": number|null,
-    "battery_voltage": number|null,
-    "average_fuel_economy_kmpl": number|null,
-    "speed_kmph": number|null,
-    "rpm": number|null,
+    "odometer_km": string|null,
+    "service_trip_km": string|null,
+    "engine_hours": string|null,
+    "service_trip_hours": string|null,
+    "battery_voltage": string|null,
+    "average_fuel_economy_kmpl": string|null,
+    "speed_kmph": string|null,
+    "rpm": string|null,
     "gear": string|null,
     "clock": string|null,
     "fuel_level": string|null,
@@ -42,9 +50,9 @@ Return STRICT JSON only, no markdown:
   "confidence": "high" | "medium" | "low"
 }`;
 
-const MAX_IMAGE_WIDTH = 640;
-const MAX_IMAGE_HEIGHT = 640;
-const JPEG_QUALITY = 0.7;
+const MAX_IMAGE_WIDTH = 800;
+const MAX_IMAGE_HEIGHT = 800;
+const JPEG_QUALITY = 0.85;
 
 async function compressImage(dataUrl: string): Promise<string> {
   const parts = dataUrl.split(",");
