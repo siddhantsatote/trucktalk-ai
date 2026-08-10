@@ -1,51 +1,20 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-const SYSTEM = `You are an expert at reading truck instrument clusters, trip computers, and handwritten trip cards.
+const SYSTEM = `You are an OCR system for truck instrument clusters. You read images and output data.
 
-IMPORTANT RULES:
-1. DECIMAL POINTS: "702.2" must NOT be "7022". Look for small dots between digits. Always report as strings: "702.2" not 702.2.
-2. DIGITAL READINGS: Read each digit left to right exactly as shown on the LCD/display.
-3. ANALOG GAUGES (RPM, Speedometer, Fuel, Coolant Temp): These use a NEEDLE pointing to numbers on a circular dial. Look at where the needle points and estimate the value based on the scale markings. Common truck gauges:
-   - RPM gauge: usually 0-3000 RPM, needle near bottom-left = ~800 idle, middle = ~1500
-   - Speedometer: usually 0-160 km/h or 0-100 mph
-   - Fuel gauge: E (empty) to F (full), or 0-100%
-   - Coolant temp: usually 40-120°C, normal around 90°C
-   If the needle is at the very bottom/zero position and engine appears off, report null.
-4. WARNING LIGHTS: Describe the actual symbol/text visible (e.g. "check engine", "oil pressure", "battery", "ABS"). Do NOT just say colors like "red", "yellow".
-5. If a value is truly not visible, use null. Never invent values.
-6. CLOCK/TIMERS: "11:04" with a colon means time. "6:06hr" means 6 hours 6 minutes.
+DO NOT explain your thinking. DO NOT describe what you see. ONLY output the JSON object below.
 
-Return STRICT JSON only, no markdown:
-{
-  "document_type": "instrument_cluster" | "trip_computer" | "trip_card" | "other",
-  "vehicle": {"cluster_part_number": string|null, "cluster_name": string|null},
-  "readings": {
-    "odometer_km": string|null,
-    "service_trip_km": string|null,
-    "engine_hours": string|null,
-    "service_trip_hours": string|null,
-    "battery_voltage": string|null,
-    "average_fuel_economy_kmpl": string|null,
-    "speed_kmph": string|null,
-    "rpm": string|null,
-    "gear": string|null,
-    "clock": string|null,
-    "fuel_level": string|null,
-    "def_level": string|null,
-    "coolant_temp": string|null,
-    "drive_mode": string|null,
-    "trip_distance": string|null,
-    "trip_duration": string|null,
-    "departure_time": string|null,
-    "consumption": string|null
-  },
-  "warning_lights": [string],
-  "trip_card": {"company": string|null, "rows": [{"trip": string, "machine_no": string, "loading_time": string, "remarks": string}]},
-  "summary": string,
-  "maintenance_notes": [string],
-  "confidence": "high" | "medium" | "low"
-}`;
+Rules:
+- Report ALL readings as strings (e.g. "742.2" not 742.2)
+- Look for decimal points (dots) between digits — they are critical
+- For analog gauges (RPM, fuel, speed, coolant): read where the needle points on the dial
+- For digital displays: read each digit exactly as shown
+- If not visible, use null
+- Clock uses colons (12:05 PM), timers use colons (6:06hr)
+
+Output ONLY this JSON, nothing else:
+{"document_type":"instrument_cluster","vehicle":{"cluster_part_number":null,"cluster_name":null},"readings":{"odometer_km":null,"service_trip_km":null,"engine_hours":null,"service_trip_hours":null,"battery_voltage":null,"average_fuel_economy_kmpl":null,"speed_kmph":null,"rpm":null,"gear":null,"clock":null,"fuel_level":null,"def_level":null,"coolant_temp":null,"drive_mode":null,"trip_distance":null,"trip_duration":null,"departure_time":null,"consumption":null},"warning_lights":[],"trip_card":null,"summary":"","maintenance_notes":[],"confidence":"high"}`;
 
 const MAX_IMAGE_WIDTH = 800;
 const MAX_IMAGE_HEIGHT = 800;
@@ -116,6 +85,7 @@ async function callGemini(imageUrl: string, fileName: string): Promise<ProviderR
         model: "gemini-2.0-flash",
         max_tokens: 4096,
         temperature: 0.1,
+        response_format: { type: "json_object" },
       }),
     },
   );
@@ -196,12 +166,46 @@ async function callNvidia(imageUrl: string, fileName: string): Promise<ProviderR
 function parseJsonFromContent(content: string): unknown {
   const trimmed = content.trim();
 
+  // First: try to find JSON in code blocks
   const codeBlockMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
   if (codeBlockMatch) {
-    return JSON.parse(codeBlockMatch[1].trim());
+    try {
+      return JSON.parse(codeBlockMatch[1].trim());
+    } catch {
+      // Fall through to try other methods
+    }
   }
 
-  return JSON.parse(trimmed);
+  // Second: try direct parse
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    // Fall through
+  }
+
+  // Third: find the FIRST { ... } JSON block in the response
+  // This handles cases where thinking text precedes the JSON
+  const firstBrace = trimmed.indexOf("{");
+  const lastBrace = trimmed.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    try {
+      return JSON.parse(trimmed.substring(firstBrace, lastBrace + 1));
+    } catch {
+      // Fall through
+    }
+  }
+
+  // Fourth: try to find any JSON object by matching braces
+  const jsonMatch = trimmed.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    try {
+      return JSON.parse(jsonMatch[0]);
+    } catch {
+      // Fall through
+    }
+  }
+
+  throw new Error("No valid JSON found in response");
 }
 
 const DECIMAL_FIELDS: Record<string, { maxDigitsBeforeDot: number; defaultDotFromRight: number }> = {
