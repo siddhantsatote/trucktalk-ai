@@ -120,6 +120,7 @@ async function callGroq(imageUrl: string, fileName: string): Promise<ProviderRes
       model: "qwen/qwen3.6-27b",
       max_tokens: 4096,
       temperature: 0.1,
+      response_format: { type: "json_object" },
     }),
   });
   if (!res.ok) throw new Error(`Groq ${res.status}: ${(await res.text()).slice(0, 200)}`);
