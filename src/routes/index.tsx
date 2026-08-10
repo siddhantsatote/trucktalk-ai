@@ -3,7 +3,14 @@ import { useCallback, useRef, useState } from "react";
 import { Loader2, Upload, Truck, AlertTriangle, Camera } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { analyzeTruckImage } from "./api/analyze-truck.server";
+
+declare const puter: {
+  ai: {
+    chat: (prompt: string, media?: string, options?: Record<string, unknown>) => Promise<{
+      message?: { content?: string };
+    }>;
+  };
+};
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -91,6 +98,36 @@ function compressImageClient(file: File): Promise<string> {
   });
 }
 
+const SYSTEM_PROMPT = `You are an expert at reading truck instrument clusters and trip computers.
+
+RULES:
+1. DECIMAL POINTS: "702.2" must NOT be "7022". Look for small dots between digits. Always report as strings: "702.2" not 702.2.
+2. DIGITAL READINGS: Read each digit left to right exactly as shown on the LCD/display.
+3. ANALOG GAUGES (RPM, Speedometer, Fuel, Coolant Temp): These use a NEEDLE pointing to numbers on a circular dial. Look at where the needle points and estimate the value based on the scale markings.
+4. WARNING LIGHTS: Describe the actual symbol/text visible (e.g. "check engine", "oil pressure"). Do NOT just say colors.
+5. If a value is truly not visible, use null. Never invent values.
+6. CLOCK/TIMERS: "11:04" with a colon means time. "6:06hr" means 6 hours 6 minutes.
+
+Return STRICT JSON only, no markdown:
+{
+  "document_type": "instrument_cluster" | "trip_computer" | "trip_card" | "other",
+  "vehicle": {"cluster_part_number": string|null, "cluster_name": string|null},
+  "readings": {
+    "odometer_km": string|null, "service_trip_km": string|null,
+    "engine_hours": string|null, "service_trip_hours": string|null,
+    "battery_voltage": string|null, "average_fuel_economy_kmpl": string|null,
+    "speed_kmph": string|null, "rpm": string|null, "gear": string|null,
+    "clock": string|null, "fuel_level": string|null, "def_level": string|null,
+    "coolant_temp": string|null, "drive_mode": string|null,
+    "trip_distance": string|null, "trip_duration": string|null,
+    "departure_time": string|null, "consumption": string|null
+  },
+  "warning_lights": [string],
+  "trip_card": {"company": string|null, "rows": [{"trip": string, "machine_no": string, "loading_time": string, "remarks": string}]},
+  "summary": string, "maintenance_notes": [string],
+  "confidence": "high" | "medium" | "low"
+}`;
+
 function Index() {
   const [items, setItems] = useState<Item[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -103,8 +140,18 @@ function Index() {
       const id = `${file.name}-${Date.now()}-${Math.random()}`;
       setItems((prev) => [...prev, { id, name: file.name, url: dataUrl, loading: true }]);
       try {
-        const response = await analyzeTruckImage({ data: { image: dataUrl, name: file.name } });
-        const json = response?.data ?? response;
+        const response = await puter.ai.chat(
+          `${SYSTEM_PROMPT}\n\nFile: ${file.name}. Extract the truck information as JSON.`,
+          dataUrl,
+          { model: "google/gemini-2.0-flash" },
+        );
+        const content = response?.message?.content ?? "";
+        let json;
+        try {
+          json = JSON.parse(content);
+        } catch {
+          json = { summary: content, confidence: "low" };
+        }
         setItems((prev) =>
           prev.map((i) => (i.id === id ? { ...i, loading: false, result: json } : i)),
         );
