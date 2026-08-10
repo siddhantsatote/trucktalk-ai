@@ -91,36 +91,24 @@ async function compressImage(dataUrl: string): Promise<string> {
   return `data:image/jpeg;base64,${btoa(b64)}`;
 }
 
-const inputSchema = z.object({ image: z.string(), name: z.string() });
+type ProviderResult = { content: string; provider: string };
 
-export const analyzeTruckImage = createServerFn({ method: "POST" })
-  .validator(inputSchema)
-  .handler(async (ctx) => {
-    const { image, name } = ctx.data;
-    try {
-      const key = process.env["GEMINI_API_KEY"];
-      if (!key) {
-        return { error: "Missing GEMINI_API_KEY environment variable. Get one free at https://aistudio.google.com/apikey" };
-      }
+async function callGemini(imageUrl: string, fileName: string): Promise<ProviderResult> {
+  const key = process.env["GEMINI_API_KEY"];
+  if (!key) throw new Error("no GEMINI_API_KEY");
 
-      if (!image || typeof image !== "string") {
-        return { error: "No image provided" };
-      }
-
-      let imageUrl: string;
-      try {
-        imageUrl = await compressImage(image);
-      } catch {
-        imageUrl = image;
-      }
-
-      const payload = {
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${key}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
         messages: [
           { role: "system", content: SYSTEM },
           {
             role: "user",
             content: [
-              { type: "text", text: `File: ${name}. Extract the truck information as JSON.` },
+              { type: "text", text: `File: ${fileName}. Extract the truck information as JSON.` },
               { type: "image_url", image_url: { url: imageUrl } },
             ],
           },
@@ -128,34 +116,120 @@ export const analyzeTruckImage = createServerFn({ method: "POST" })
         model: "gemini-2.0-flash",
         max_tokens: 4096,
         temperature: 0.1,
-      };
+      }),
+    },
+  );
+  if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const data = await res.json();
+  const content = data?.choices?.[0]?.message?.content ?? "";
+  if (!content) throw new Error("Gemini returned empty");
+  return { content, provider: "gemini" };
+}
 
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${key}`,
+async function callGroq(imageUrl: string, fileName: string): Promise<ProviderResult> {
+  const key = process.env["GROQ_API_KEY"];
+  if (!key) throw new Error("no GROQ_API_KEY");
+
+  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messages: [
+        { role: "system", content: SYSTEM },
         {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          role: "user",
+          content: [
+            { type: "text", text: `File: ${fileName}. Extract the truck information as JSON.` },
+            { type: "image_url", image_url: { url: imageUrl } },
+          ],
         },
-      );
+      ],
+      model: "qwen/qwen3.6-27b",
+      max_tokens: 4096,
+      temperature: 0.1,
+    }),
+  });
+  if (!res.ok) throw new Error(`Groq ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const data = await res.json();
+  const content = data?.choices?.[0]?.message?.content ?? "";
+  if (!content) throw new Error("Groq returned empty");
+  return { content, provider: "groq" };
+}
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        return { error: `Gemini API error (${response.status}): ${errorText.slice(0, 300)}` };
-      }
+async function callNvidia(imageUrl: string, fileName: string): Promise<ProviderResult> {
+  const key = process.env["NVIDIA_API_KEY"];
+  if (!key) throw new Error("no NVIDIA_API_KEY");
 
-      const data = await response.json();
-      const content = data?.choices?.[0]?.message?.content ?? "";
-      if (!content) {
-        return { error: "No content returned from AI model" };
-      }
+  const res = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({
+      messages: [
+        { role: "system", content: SYSTEM },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: `File: ${fileName}. Extract the truck information as JSON.` },
+            { type: "image_url", image_url: { url: imageUrl } },
+          ],
+        },
+      ],
+      model: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+      max_tokens: 4096,
+      temperature: 0.1,
+    }),
+  });
+  if (!res.ok) throw new Error(`NVIDIA ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const data = await res.json();
+  const content = data?.choices?.[0]?.message?.content ?? "";
+  if (!content) throw new Error("NVIDIA returned empty");
+  return { content, provider: "nvidia" };
+}
 
-      try {
-        return JSON.parse(content);
-      } catch {
-        return { summary: content, confidence: "low" };
-      }
-    } catch (err) {
-      return { error: `Server error: ${err instanceof Error ? err.message : String(err)}` };
+const inputSchema = z.object({ image: z.string(), name: z.string() });
+
+export const analyzeTruckImage = createServerFn({ method: "POST" })
+  .validator(inputSchema)
+  .handler(async (ctx) => {
+    const { image, name } = ctx.data;
+    if (!image || typeof image !== "string") {
+      return { error: "No image provided" };
     }
+
+    let imageUrl: string;
+    try {
+      imageUrl = await compressImage(image);
+    } catch {
+      imageUrl = image;
+    }
+
+    const providers = [callGemini, callGroq, callNvidia];
+    const errors: string[] = [];
+
+    for (const provider of providers) {
+      try {
+        const result = await provider(imageUrl, name);
+        console.log(`[analyze-truck] Success with ${result.provider}`);
+        try {
+          return JSON.parse(result.content);
+        } catch {
+          return { summary: result.content, confidence: "low" };
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`[analyze-truck] ${msg}`);
+        errors.push(msg);
+      }
+    }
+
+    return {
+      error: `All providers failed: ${errors.join(" | ")}`,
+    };
   });
