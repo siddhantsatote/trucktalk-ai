@@ -16,50 +16,6 @@ Rules:
 Output ONLY this JSON, nothing else:
 {"document_type":"instrument_cluster","vehicle":{"cluster_part_number":null,"cluster_name":null},"readings":{"odometer_km":null,"service_trip_km":null,"engine_hours":null,"service_trip_hours":null,"battery_voltage":null,"average_fuel_economy_kmpl":null,"speed_kmph":null,"rpm":null,"gear":null,"clock":null,"fuel_level":null,"def_level":null,"coolant_temp":null,"drive_mode":null,"trip_distance":null,"trip_duration":null,"departure_time":null,"consumption":null},"warning_lights":[],"trip_card":null,"summary":"","maintenance_notes":[],"confidence":"high"}`;
 
-const MAX_IMAGE_WIDTH = 800;
-const MAX_IMAGE_HEIGHT = 800;
-const JPEG_QUALITY = 0.85;
-
-async function compressImage(dataUrl: string): Promise<string> {
-  const parts = dataUrl.split(",");
-  const header = parts[0] ?? "";
-  const base64 = parts[1] ?? "";
-  const mimeMatch = header.match(/data:(.*?);/);
-  const mime = mimeMatch?.[1] ?? "image/jpeg";
-
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  const blob = new Blob([bytes], { type: mime });
-
-  const bitmap = await createImageBitmap(blob);
-  const { width, height } = bitmap;
-  let targetW = width;
-  let targetH = height;
-
-  if (width > MAX_IMAGE_WIDTH || height > MAX_IMAGE_HEIGHT) {
-    const scale = Math.min(MAX_IMAGE_WIDTH / width, MAX_IMAGE_HEIGHT / height);
-    targetW = Math.round(width * scale);
-    targetH = Math.round(height * scale);
-  }
-
-  const canvas = new OffscreenCanvas(targetW, targetH);
-  const ctx = canvas.getContext("2d")!;
-  ctx.drawImage(bitmap, 0, 0, targetW, targetH);
-  bitmap.close();
-
-  const outBlob = await canvas.convertToBlob({ type: "image/jpeg", quality: JPEG_QUALITY });
-  const arrayBuf = await outBlob.arrayBuffer();
-  const arr = new Uint8Array(arrayBuf);
-  let b64 = "";
-  for (let i = 0; i < arr.length; i++) {
-    const byte = arr[i];
-    if (byte !== undefined) b64 += String.fromCharCode(byte);
-  }
-
-  return `data:image/jpeg;base64,${btoa(b64)}`;
-}
-
 type ProviderResult = { content: string; provider: string };
 
 async function callGemini(imageUrl: string, fileName: string): Promise<ProviderResult> {
@@ -165,13 +121,10 @@ async function callNvidia(imageUrl: string, fileName: string): Promise<ProviderR
 
 function stripThinkingTags(content: string): string {
   let result = content;
-  // Remove complete thinking blocks
   result = result.replace(/<think>[\s\S]*?<\/think>/gi, "");
   result = result.replace(/<think>[\s\S]*?<｜end▁of▁thinking｜>/gi, "");
   result = result.replace(/<\|begin▁of▁thinking\|>[\s\S]*?<\|end▁of▁thinking\|>/gi, "");
-  // Remove unclosed thinking blocks (from <think to end of string)
   result = result.replace(/<think>[\s\S]*$/gi, "");
-  // Also handle variants with <think (no closing >) or </think> embedded in text
   if (result.includes("<think>") || result.includes("<｜")) {
     const firstJson = result.indexOf("{");
     if (firstJson !== -1) {
@@ -185,25 +138,21 @@ function parseJsonFromContent(content: string): unknown {
   const cleaned = stripThinkingTags(content);
   const trimmed = cleaned.trim();
 
-  // First: try to find JSON in code blocks
   const codeBlockMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
   if (codeBlockMatch) {
     try {
       return JSON.parse(codeBlockMatch[1].trim());
     } catch {
-      // Fall through to try other methods
+      // Fall through
     }
   }
 
-  // Second: try direct parse
   try {
     return JSON.parse(trimmed);
   } catch {
     // Fall through
   }
 
-  // Third: find the FIRST { ... } JSON block in the response
-  // This handles cases where thinking text precedes the JSON
   const firstBrace = trimmed.indexOf("{");
   const lastBrace = trimmed.lastIndexOf("}");
   if (firstBrace !== -1 && lastBrace > firstBrace) {
@@ -214,7 +163,6 @@ function parseJsonFromContent(content: string): unknown {
     }
   }
 
-  // Fourth: try to find any JSON object by matching braces
   const jsonMatch = trimmed.match(/\{[\s\S]*\}/);
   if (jsonMatch) {
     try {
@@ -283,13 +231,7 @@ export const analyzeTruckImage = createServerFn({ method: "POST" })
       return { error: "No image provided" };
     }
 
-    let imageUrl: string;
-    try {
-      imageUrl = await compressImage(image);
-    } catch {
-      imageUrl = image;
-    }
-
+    const imageUrl = image;
     const providers = [callGemini, callGroq, callNvidia];
     const errors: string[] = [];
 
