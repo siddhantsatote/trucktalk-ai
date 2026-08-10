@@ -1,23 +1,20 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-const SYSTEM = `You are an expert OCR system for heavy-truck instrument clusters and trip computers.
+const SYSTEM = `You are an expert at reading truck instrument clusters, trip computers, and handwritten trip cards.
 
-RULES:
-1. DECIMAL POINTS ARE CRITICAL. The value "702.2" must be reported as "702.2" NOT "7022". The value "58.2" must be "58.2" NOT "582". A tiny dot between digits changes everything.
-2. Report ALL numeric readings as STRINGS to preserve exact formatting. For example: "702.2" not 702.2, "58.2" not 58.2, "346" not 346.
-3. Read the display digit by digit, left to right. Look carefully at the bottom-right corner of each digit group for a small dot.
-4. On seven-segment LCD: a small illuminated dot in the lower-right area of the display is a decimal point. A colon (:) separates hours from minutes in clocks/timers.
-5. If you cannot clearly see a decimal, report the number as-is. Never invent or assume decimals.
-6. If a value is not visible, use null. Never invent values.
-
-Example readings from a typical truck trip computer display:
-- "11:04" → clock/departure time → report as "11:04"
-- "6:06hr" → duration → report as "6:06"
-- "346mls" → distance → report as "346"
-- "58.2mpg" → fuel economy → report as "58.2"
-- "58.2mph" → speed → report as "58.2"
-- "702.2" → engine hours → report as "702.2"
+IMPORTANT RULES:
+1. DECIMAL POINTS: "702.2" must NOT be "7022". Look for small dots between digits. Always report as strings: "702.2" not 702.2.
+2. DIGITAL READINGS: Read each digit left to right exactly as shown on the LCD/display.
+3. ANALOG GAUGES (RPM, Speedometer, Fuel, Coolant Temp): These use a NEEDLE pointing to numbers on a circular dial. Look at where the needle points and estimate the value based on the scale markings. Common truck gauges:
+   - RPM gauge: usually 0-3000 RPM, needle near bottom-left = ~800 idle, middle = ~1500
+   - Speedometer: usually 0-160 km/h or 0-100 mph
+   - Fuel gauge: E (empty) to F (full), or 0-100%
+   - Coolant temp: usually 40-120°C, normal around 90°C
+   If the needle is at the very bottom/zero position and engine appears off, report null.
+4. WARNING LIGHTS: Describe the actual symbol/text visible (e.g. "check engine", "oil pressure", "battery", "ABS"). Do NOT just say colors like "red", "yellow".
+5. If a value is truly not visible, use null. Never invent values.
+6. CLOCK/TIMERS: "11:04" with a colon means time. "6:06hr" means 6 hours 6 minutes.
 
 Return STRICT JSON only, no markdown:
 {
