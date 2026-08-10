@@ -302,6 +302,9 @@ export const analyzeTruckImage = createServerFn({ method: "POST" })
           return { ...fixMissingDecimals(parsed as Record<string, unknown>), provider: result.provider };
         } catch {
           const cleaned = stripThinkingTags(result.content);
+          if (!cleaned || cleaned.length < 10) {
+            throw new Error(`${result.provider}: model returned thinking text only, no JSON`);
+          }
           return { summary: cleaned.slice(0, 500), confidence: "low", provider: result.provider };
         }
       } catch (err) {
