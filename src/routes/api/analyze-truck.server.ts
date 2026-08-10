@@ -193,6 +193,17 @@ async function callNvidia(imageUrl: string, fileName: string): Promise<ProviderR
   return { content, provider: "nvidia" };
 }
 
+function parseJsonFromContent(content: string): unknown {
+  const trimmed = content.trim();
+
+  const codeBlockMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
+  if (codeBlockMatch) {
+    return JSON.parse(codeBlockMatch[1].trim());
+  }
+
+  return JSON.parse(trimmed);
+}
+
 const inputSchema = z.object({ image: z.string(), name: z.string() });
 
 export const analyzeTruckImage = createServerFn({ method: "POST" })
@@ -218,7 +229,7 @@ export const analyzeTruckImage = createServerFn({ method: "POST" })
         const result = await provider(imageUrl, name);
         console.log(`[analyze-truck] Success with ${result.provider}`);
         try {
-          return JSON.parse(result.content);
+          return parseJsonFromContent(result.content);
         } catch {
           return { summary: result.content, confidence: "low" };
         }
