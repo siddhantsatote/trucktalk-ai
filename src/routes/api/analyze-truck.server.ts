@@ -98,9 +98,9 @@ export const analyzeTruckImage = createServerFn({ method: "POST" })
   .handler(async (ctx) => {
     const { image, name } = ctx.data;
     try {
-      const key = process.env["NVIDIA_API_KEY"];
+      const key = process.env["GEMINI_API_KEY"];
       if (!key) {
-        return { error: "Missing NVIDIA_API_KEY environment variable. Set it in your .env file." };
+        return { error: "Missing GEMINI_API_KEY environment variable. Get one free at https://aistudio.google.com/apikey" };
       }
 
       if (!image || typeof image !== "string") {
@@ -114,9 +114,6 @@ export const analyzeTruckImage = createServerFn({ method: "POST" })
         imageUrl = image;
       }
 
-      const payloadSizeKB = Math.round(new TextEncoder().encode(JSON.stringify({ image: imageUrl })).byteLength / 1024);
-      console.log(`[analyze-truck] Payload image size: ~${payloadSizeKB}KB`);
-
       const payload = {
         messages: [
           { role: "system", content: SYSTEM },
@@ -128,25 +125,23 @@ export const analyzeTruckImage = createServerFn({ method: "POST" })
             ],
           },
         ],
-        model: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+        model: "gemini-2.0-flash",
         max_tokens: 4096,
-        temperature: 0.6,
-        top_p: 0.95,
+        temperature: 0.1,
       };
 
-      const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${key}`,
-          "Content-Type": "application/json",
-          Accept: "application/json",
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${key}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
         },
-        body: JSON.stringify(payload),
-      });
+      );
 
       if (!response.ok) {
         const errorText = await response.text();
-        return { error: `NVIDIA API error (${response.status}): ${errorText.slice(0, 300)}` };
+        return { error: `Gemini API error (${response.status}): ${errorText.slice(0, 300)}` };
       }
 
       const data = await response.json();

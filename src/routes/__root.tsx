@@ -109,7 +109,6 @@ function RootShell({ children }: { children: ReactNode }) {
       <body>
         {children}
         <Scripts />
-        <script src="https://js.puter.com/v2/"></script>
       </body>
     </html>
   );
