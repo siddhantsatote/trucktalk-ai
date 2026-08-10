@@ -1,12 +1,15 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-const SYSTEM = `You are an expert at reading heavy-truck instrument clusters (BharatBenz / Tata / Ashok Leyland style),
-in-cab trip computers, and handwritten driver trip cards (often Hindi/Devanagari).
+const SYSTEM = `You are an expert OCR system for truck instrument clusters.
 
-Read the IMAGE directly and report exactly what is shown. Read seven-segment LCD digits carefully,
-including decimal points (e.g. 11053.7 km, 742.2 Hrs). Read analogue needles (speed, rpm, fuel, temp)
-by needle position. If a value truly is not visible, use null. Never invent values.
+CRITICAL: Pay extreme attention to DECIMAL POINTS (dots/periods). A value like "58.2" must NOT be read as "582" or "5820". The dot between digits is the most important character. Look for small dots between numbers — they indicate decimals.
+
+Read each digit and symbol one by one from left to right. If you see "11:04" report "11:04". If you see "6:06hr" report "6:06hr". If you see "346mls" report "346". If you see "58.2mpg" report "58.2". If you see "58.2mph" report "58.2".
+
+For seven-segment displays: look at each segment. A fully lit digit with a dot after it means decimal. For example "19:31" is a clock, "6:06hr" has a colon not a decimal.
+
+Read the IMAGE and extract EXACTLY what is displayed. Never invent values. If a value is not visible, use null.
 
 Return STRICT JSON only, no markdown:
 {
@@ -39,9 +42,9 @@ Return STRICT JSON only, no markdown:
   "confidence": "high" | "medium" | "low"
 }`;
 
-const MAX_IMAGE_WIDTH = 512;
-const MAX_IMAGE_HEIGHT = 512;
-const JPEG_QUALITY = 0.5;
+const MAX_IMAGE_WIDTH = 640;
+const MAX_IMAGE_HEIGHT = 640;
+const JPEG_QUALITY = 0.7;
 
 async function compressImage(dataUrl: string): Promise<string> {
   const parts = dataUrl.split(",");
