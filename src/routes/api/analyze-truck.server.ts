@@ -117,9 +117,10 @@ async function callGroq(imageUrl: string, fileName: string): Promise<ProviderRes
           ],
         },
       ],
-      model: "meta-llama/llama-4-scout-17b-16e-instruct",
+      model: "qwen/qwen3.6-27b",
       max_tokens: 4096,
       temperature: 0.1,
+      response_format: { type: "json_object" },
     }),
   });
   if (!res.ok) throw new Error(`Groq ${res.status}: ${(await res.text()).slice(0, 200)}`);
@@ -169,8 +170,15 @@ function stripThinkingTags(content: string): string {
   result = result.replace(/<think>[\s\S]*?<\/think>/gi, "");
   result = result.replace(/<think>[\s\S]*?<｜end▁of▁thinking｜>/gi, "");
   result = result.replace(/<\|begin▁of▁thinking\|>[\s\S]*?<\|end▁of▁thinking\|>/gi, "");
-  // Remove unclosed thinking blocks (from <think> to end of string)
-  result = result.replace(/<think>[\s\S]*/gi, "");
+  // Remove unclosed thinking blocks (from <think to end of string)
+  result = result.replace(/<think>[\s\S]*$/gi, "");
+  // Also handle variants with <think (no closing >) or </think> embedded in text
+  if (result.includes("<think>") || result.includes("<｜")) {
+    const firstJson = result.indexOf("{");
+    if (firstJson !== -1) {
+      result = result.substring(firstJson);
+    }
+  }
   return result.trim();
 }
 
@@ -292,7 +300,7 @@ export const analyzeTruckImage = createServerFn({ method: "POST" })
         console.log(`[analyze-truck] Success with ${result.provider}`);
         try {
           const parsed = parseJsonFromContent(result.content);
-          return fixMissingDecimals(parsed as Record<string, unknown>);
+          return { ...fixMissingDecimals(parsed as Record<string, unknown>), provider: result.provider };
         } catch {
           const cleaned = stripThinkingTags(result.content);
           return { summary: cleaned.slice(0, 500), confidence: "low", provider: result.provider };

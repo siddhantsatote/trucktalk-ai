@@ -37,6 +37,7 @@ type Result = {
     rows?: { trip?: string; machine_no?: string; loading_time?: string; remarks?: string }[];
   };
   summary?: string;
+  provider?: string;
   maintenance_notes?: string[];
   confidence?: string;
   error?: string;
@@ -226,6 +227,7 @@ function ResultView({ result }: { result: Result }) {
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="secondary">{result.document_type ?? "unknown"}</Badge>
         {result.confidence && <Badge variant="outline">confidence: {result.confidence}</Badge>}
+        {result.provider && <Badge variant="outline">{result.provider}</Badge>}
         {result.vehicle?.cluster_name && (
           <Badge variant="outline">{result.vehicle.cluster_name}</Badge>
         )}
