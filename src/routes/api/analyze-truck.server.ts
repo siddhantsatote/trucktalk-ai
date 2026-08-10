@@ -163,8 +163,17 @@ async function callNvidia(imageUrl: string, fileName: string): Promise<ProviderR
   return { content, provider: "nvidia" };
 }
 
+function stripThinkingTags(content: string): string {
+  return content
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .replace(/<think>[\s\S]*?<｜end▁of▁thinking｜>/gi, "")
+    .replace(/<\|begin▁of▁thinking\|>[\s\S]*?<\|end▁of▁thinking\|>/gi, "")
+    .trim();
+}
+
 function parseJsonFromContent(content: string): unknown {
-  const trimmed = content.trim();
+  const cleaned = stripThinkingTags(content);
+  const trimmed = cleaned.trim();
 
   // First: try to find JSON in code blocks
   const codeBlockMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
