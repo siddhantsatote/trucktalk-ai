@@ -23,10 +23,10 @@ async function callGemini(imageUrl: string, fileName: string): Promise<ProviderR
   if (!key) throw new Error("no GEMINI_API_KEY");
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${key}`,
+    "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
       body: JSON.stringify({
         messages: [
           { role: "system", content: SYSTEM },
