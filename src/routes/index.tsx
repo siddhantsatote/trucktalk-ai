@@ -105,7 +105,7 @@ function Index() {
       setItems((prev) => [...prev, { id, name: file.name, url: dataUrl, loading: true }]);
       try {
         const response = await analyzeTruckImage({ data: { image: dataUrl, name: file.name } });
-        const json = response?.data ?? response;
+        const json = (response as { data?: Result })?.data ?? (response as Result);
         setItems((prev) =>
           prev.map((i) => (i.id === id ? { ...i, loading: false, result: json } : i)),
         );
