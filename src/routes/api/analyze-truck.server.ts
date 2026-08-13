@@ -23,10 +23,10 @@ async function callGemini(imageUrl: string, fileName: string): Promise<ProviderR
   if (!key) throw new Error("no GEMINI_API_KEY");
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${key}`,
+    "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
       body: JSON.stringify({
         messages: [
           { role: "system", content: SYSTEM },
@@ -38,7 +38,7 @@ async function callGemini(imageUrl: string, fileName: string): Promise<ProviderR
             ],
           },
         ],
-        model: "gemini-2.0-flash",
+        model: "gemini-2.5-flash",
         max_tokens: 4096,
         temperature: 0.1,
         response_format: { type: "json_object" },
@@ -141,7 +141,7 @@ function parseJsonFromContent(content: string): unknown {
   const codeBlockMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
   if (codeBlockMatch) {
     try {
-      return JSON.parse(codeBlockMatch[1].trim());
+      return JSON.parse((codeBlockMatch[1] ?? "").trim());
     } catch {
       // Fall through
     }
@@ -193,7 +193,7 @@ const DECIMAL_FIELDS: Record<string, { maxDigitsBeforeDot: number; defaultDotFro
 function fixMissingDecimals(parsed: Record<string, unknown>): Record<string, unknown> {
   if (!parsed || typeof parsed !== "object") return parsed;
 
-  const readings = parsed.readings as Record<string, string | null> | undefined;
+  const readings = parsed["readings"] as Record<string, string | null> | undefined;
   if (!readings || typeof readings !== "object") return parsed;
 
   const fixed = { ...readings };
